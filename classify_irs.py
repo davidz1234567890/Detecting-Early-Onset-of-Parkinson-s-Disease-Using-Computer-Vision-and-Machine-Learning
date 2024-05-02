@@ -35,12 +35,12 @@ import argparse
 
 #two function definitions up here
 
-def quantify_image(image):
+def get_features(image):
 	''' compute the histogram of oriented gradients feature vector for
 	 the input image'''
 	features = feature.hog(image, orientations=9, 
 						#gradients will be computed for 9 orientation angles
-		pixels_per_cell=(10, 10), cells_per_block=(2, 2),
+		pixels_per_cell=(16, 16), cells_per_block=(2, 2),
 		transform_sqrt=True, block_norm="L1")
 	
 	'''transform_sqrt=True: This parameter indicates whether 
@@ -61,8 +61,9 @@ def load_split(path):
 
 	''' grab the list of images in the input directory, then initialize
 	 the list of data (i.e., images) and class labels'''
-	
+	print("entering")
 	imagePaths = list(paths.list_images(path))
+	print(imagePaths)
 	data = []
 	labels = []
 	# loop over the image paths
@@ -103,7 +104,7 @@ def load_split(path):
 			cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
 		
 		# quantify the image
-		features = quantify_image(image)
+		features = get_features(image)
 		# update the data and labels lists, respectively
 		data.append(features)
 		labels.append(label)
@@ -122,6 +123,7 @@ ap.add_argument("-d", "--dataset", required=True,
 ap.add_argument("-t", "--trials", type=int, default=5,
 	help="# of trials to run")
 args = vars(ap.parse_args())
+print(args)
 '''My script handles two command line arguments:
 
 --dataset : The path to the input dataset (either waves or spirals).
@@ -129,7 +131,7 @@ args = vars(ap.parse_args())
  define the path to the training and testing directories'''
 
 trainingPath = os.path.sep.join([args["dataset"], "training"])
-
+print(trainingPath)
 ''' This line constructs the path to the training directory by joining the 
 value of args["dataset"] (which presumably 
 contains the root directory of the dataset) with the subdirectory "training".
@@ -144,11 +146,11 @@ path = os.path.sep.join(components)'''
 testingPath = os.path.sep.join([args["dataset"], "testing"])
 # loading the training and testing data
 print("[INFO] loading data...")
-(trainX, trainY) = load_split(trainingPath)
+(train_input, train_label) = load_split(trainingPath)
 (testX, testY) = load_split(testingPath)
 # encode the labels as integers
 le = LabelEncoder()
-trainY = le.fit_transform(trainY)
+train_label = le.fit_transform(train_label)
 testY = le.transform(testY)
 # initialize our trials dictionary
 trials = {}
@@ -156,37 +158,41 @@ trials = {}
 # loop over the number of trials to run
 for i in range(0, args["trials"]):
 	# train the model
+	
 	print("[INFO] training model {} of {}...".format(i + 1,
 		args["trials"]))
-	model = RandomForestClassifier(n_estimators=100)
+	model = RandomForestClassifier(n_estimators=105) 
 	#n_estimators = number of decision trees
- 
-
-	model.fit(trainX, trainY)
+	print(train_input)
+	print(train_label)
+	#train_input = train_input.reshape(-1, 1)
+	model.fit(train_input, train_label)
 	'''This line trains the random forest classifier model on the training data. 
- The fit() method fits the model to the training data (trainX, trainY), 
-where trainX contains the input features and trainY contains the corresponding labels.'''
+ The fit() method fits the model to the training data (train_input, train_label), 
+where train_input contains the input features and train_label contains the corresponding labels.'''
 	
 	
 	''' make predictions on the testing data and initialize a dictionary
 	 to store our computed metrics'''
 	
 	predictions = model.predict(testX)
+	print("here are the preds")
+	print(predictions)
 	metrics = {}
 
 	'''compute the confusion matrix and and use it to derive the raw
 	 accuracy, sensitivity, and specificity'''
 	
-	cm = confusion_matrix(testY, predictions).flatten()
-	(tn, fp, fn, tp) = cm
-	metrics["acc"] = (tp + tn) / float(cm.sum())
-	metrics["sensitivity"] = tp / float(tp + fn)
-	metrics["specificity"] = tn / float(tn + fp)
+	matrix = confusion_matrix(testY, predictions).flatten()
+	(true_negative, false_positive, false_negative, true_positive) = matrix
+	metrics["accuracy"] = (true_positive + true_negative) / float(matrix.sum())
+	metrics["sensitivity"] = true_positive / float(true_positive + false_negative)
+	metrics["specificity"] = true_negative / float(true_negative + false_positive)
 	
 	'''These lines calculate and store performance metrics based on the values 
- derived from the confusion matrix. 
- Specifically, it computes accuracy (acc), sensitivity (true positive rate), 
- and specificity (true negative rate).
+        derived from the confusion matrix. 
+       Specifically, it computes accuracy (acc), sensitivity (true positive rate), 
+      and specificity (true negative rate).
 	 loop over the metrics'''
 	
 	for (k, v) in metrics.items():
@@ -203,7 +209,7 @@ where trainX contains the input features and trainY contains the corresponding l
 	and then updates the trials dictionary with the updated list of values for the current metric.'''
 
 # loop over our metrics
-for metric in ("acc", "sensitivity", "specificity"):
+for metric in ("accuracy", "sensitivity", "specificity"):
 	# grab the list of values for the current metric, then compute
 	# the mean and standard deviation
 	values = trials[metric]
@@ -214,7 +220,7 @@ for metric in ("acc", "sensitivity", "specificity"):
 	print("=" * len(metric))
 	#This line prints a line of equals signs (=) that is the same length as the metric name printed in the previous line.
 	
-	print("u={:.4f}, o={:.4f}".format(mean, std))
+	print("mean={:.4f}, standard deviation={:.4f}".format(mean, std))
 	#The "{:.4f}" format specifier formats the floating-point numbers to have four decimal places.
 	
 	print("")
@@ -245,6 +251,8 @@ images = []
 for i in idxs:
 	# load the testing image, clone it, and resize it
 	image = cv2.imread(testingPaths[i])
+	print(testingPaths[i])
+	parts = testingPaths[i].split("\\")
 	output = image.copy()
 	output = cv2.resize(output, (128, 128))
 	'''Inside the loop, this block of code loads an image from the testingPaths 
@@ -256,7 +264,7 @@ for i in idxs:
 
 	# pre-process the image in the same manner we did earlier
 	image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-	image = cv2.resize(image, (200, 200))
+	image = cv2.resize(image, (200,200))
 	image = cv2.threshold(image, 0, 255,
 		cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
 	'''This block of code preprocesses the original image (image) before 
@@ -274,8 +282,8 @@ for i in idxs:
 	# quantify the image and make predictions based on the extracted
 	# features using the last trained Random Forest
  
- #quantify_images returns a bunch of features
-	features = quantify_image(image)
+ #get_featuress returns a bunch of features
+	features = get_features(image)
 	preds = model.predict([features])
 	'''This line uses the trained model (presumably a machine learning model) to 
 	make predictions on the features extracted from the image. 
@@ -285,11 +293,13 @@ for i in idxs:
 	label = le.inverse_transform(preds)[0]
 	# draw the colored class label on the output image and add it to
 	# the set of output images
-	color = (0, 255, 0) if label == "healthy" else (0, 0, 255)
+	color = (0, 255, 255) if label == "healthy" else (255, 0, 255)
 	# If the predicted label is "healthy", the color is set to green (0, 255, 0); otherwise, it is set to red (0, 0, 255).
 	
 	cv2.putText(output, label, (3, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
 		color, 2)
+	cv2.putText(output, parts[-2], (18,100), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+		(0,0,255), 2)
 	images.append(output)
 # create a montage using 128x128 "tiles" with 5 rows and 5 columns
 montage = build_montages(images, (128, 128), (5, 5))[0]
