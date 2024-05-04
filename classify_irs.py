@@ -57,7 +57,7 @@ def get_features(image):
 	return features
 
 
-def load_split(path):
+def process(path):
 
 	''' grab the list of images in the input directory, then initialize
 	 the list of data (i.e., images) and class labels'''
@@ -146,8 +146,8 @@ path = os.path.sep.join(components)'''
 testingPath = os.path.sep.join([args["dataset"], "testing"])
 # loading the training and testing data
 print("[INFO] loading data...")
-(train_input, train_label) = load_split(trainingPath)
-(testX, testY) = load_split(testingPath)
+(train_input, train_label) = process(trainingPath)
+(testX, testY) = process(testingPath)
 # encode the labels as integers
 le = LabelEncoder()
 train_label = le.fit_transform(train_label)
@@ -311,4 +311,6 @@ build_montages().'''
 # show the output montage
 cv2.imshow("Output", montage)
 cv2.waitKey(0)
+
+##Command: python classify_irs.py --dataset dataset
 
